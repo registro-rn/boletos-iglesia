@@ -7,9 +7,10 @@ import type { Nacion, Registro, Asiento, Pago, MetodoPago } from '@/types';
 import SeatMap from '@/components/SeatMap';
 import RegistrosList from '@/components/RegistrosList';
 import RegistroDetail from '@/components/RegistroDetail';
+import Dashboard from '@/components/Dashboard';
 import Toast from '@/components/Toast';
 
-type Tab = 'nuevo' | 'registros';
+type Tab = 'nuevo' | 'registros' | 'dashboard';
 
 interface ToastMessage {
   id: number;
@@ -25,6 +26,7 @@ export default function HomePage() {
   const [selectedRegistro, setSelectedRegistro] = useState<Registro | null>(null);
   const [loading, setLoading] = useState(false);
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
+  const [privacyMode, setPrivacyMode] = useState(false);
 
   // Form state
   const [nombre, setNombre] = useState('');
@@ -62,7 +64,6 @@ export default function HomePage() {
   useEffect(() => {
     fetchData();
 
-    // Real-time subscriptions
     const channel = supabase
       .channel('db-changes')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'asientos' }, () => fetchData())
@@ -98,7 +99,6 @@ export default function HomePage() {
 
     setLoading(true);
     try {
-      // 1. Create registro
       const status = montoAbono >= montoTotal ? 'liquidado' : montoAbono > 0 ? 'abono' : 'pendiente';
 
       const { data: registro, error: regError } = await supabase
@@ -118,7 +118,6 @@ export default function HomePage() {
 
       if (regError) throw regError;
 
-      // 2. Assign seats
       const { error: seatError } = await supabase
         .from('asientos')
         .update({ estado: 'ocupado', registro_id: registro.id })
@@ -126,7 +125,6 @@ export default function HomePage() {
 
       if (seatError) throw seatError;
 
-      // 3. Record payment if any
       if (montoAbono > 0) {
         const { error: payError } = await supabase
           .from('pagos')
@@ -139,7 +137,6 @@ export default function HomePage() {
         if (payError) throw payError;
       }
 
-      // 4. Send confirmation email if correo exists
       if (correo.trim()) {
         try {
           await fetch('/api/send-email', {
@@ -148,7 +145,6 @@ export default function HomePage() {
             body: JSON.stringify({ registroId: registro.id }),
           });
         } catch {
-          // Email is non-blocking
           console.log('Email send attempted');
         }
       }
@@ -175,6 +171,13 @@ export default function HomePage() {
   const montoAbono = parseFloat(montoPago) || 0;
   const saldoRestante = Math.max(0, montoTotal - montoAbono);
 
+  // Blurred value helper
+  const BlurValue = ({ children, className = '' }: { children: React.ReactNode; className?: string }) => (
+    <span className={className} style={privacyMode ? { filter: 'blur(8px)', userSelect: 'none' } : {}}>
+      {children}
+    </span>
+  );
+
   return (
     <div className="min-h-screen" style={{ background: 'var(--color-bg)' }}>
       {/* Header */}
@@ -199,9 +202,7 @@ export default function HomePage() {
             <button
               onClick={() => { setTab('nuevo'); setSelectedRegistro(null); }}
               className={`px-5 py-2 rounded-md text-sm font-medium transition-all ${
-                tab === 'nuevo'
-                  ? 'text-white shadow-lg'
-                  : 'text-slate-400 hover:text-white'
+                tab === 'nuevo' ? 'text-white shadow-lg' : 'text-slate-400 hover:text-white'
               }`}
               style={tab === 'nuevo' ? { background: 'var(--color-accent)' } : {}}
             >
@@ -210,35 +211,70 @@ export default function HomePage() {
             <button
               onClick={() => { setTab('registros'); setSelectedRegistro(null); }}
               className={`px-5 py-2 rounded-md text-sm font-medium transition-all ${
-                tab === 'registros'
-                  ? 'text-white shadow-lg'
-                  : 'text-slate-400 hover:text-white'
+                tab === 'registros' ? 'text-white shadow-lg' : 'text-slate-400 hover:text-white'
               }`}
               style={tab === 'registros' ? { background: 'var(--color-accent)' } : {}}
             >
               Registros ({registros.length})
             </button>
+            <button
+              onClick={() => { setTab('dashboard'); setSelectedRegistro(null); }}
+              className={`px-5 py-2 rounded-md text-sm font-medium transition-all ${
+                tab === 'dashboard' ? 'text-white shadow-lg' : 'text-slate-400 hover:text-white'
+              }`}
+              style={tab === 'dashboard' ? { background: 'var(--color-accent)' } : {}}
+            >
+              📊 Dashboard
+            </button>
           </div>
 
-          {/* Quick stats */}
-          <div className="flex gap-6 text-sm">
-            <div className="text-center">
-              <div className="font-bold text-lg" style={{ color: 'var(--color-accent)' }}>
-                {asientos.filter(a => a.estado === 'ocupado').length}
+          <div className="flex items-center gap-5">
+            {/* Privacy toggle */}
+            <button
+              onClick={() => setPrivacyMode(!privacyMode)}
+              className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs border transition-all"
+              style={{
+                borderColor: privacyMode ? 'var(--color-accent)' : 'var(--color-border)',
+                background: privacyMode ? 'rgba(0, 188, 212, 0.1)' : 'transparent',
+                color: privacyMode ? 'var(--color-accent)' : 'var(--color-text-muted)',
+              }}
+              title={privacyMode ? 'Mostrar datos sensibles' : 'Ocultar datos sensibles'}
+            >
+              {privacyMode ? (
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/>
+                  <path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/>
+                  <line x1="1" y1="1" x2="23" y2="23"/>
+                </svg>
+              ) : (
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+                  <circle cx="12" cy="12" r="3"/>
+                </svg>
+              )}
+              {privacyMode ? 'Oculto' : 'Visible'}
+            </button>
+
+            {/* Quick stats */}
+            <div className="flex gap-6 text-sm">
+              <div className="text-center">
+                <div className="font-bold text-lg" style={{ color: 'var(--color-accent)' }}>
+                  {asientos.filter(a => a.estado === 'ocupado').length}
+                </div>
+                <div style={{ color: 'var(--color-text-muted)' }}>Vendidos</div>
               </div>
-              <div style={{ color: 'var(--color-text-muted)' }}>Vendidos</div>
-            </div>
-            <div className="text-center">
-              <div className="font-bold text-lg text-emerald-400">
-                {asientos.filter(a => a.estado === 'disponible').length}
+              <div className="text-center">
+                <div className="font-bold text-lg text-emerald-400">
+                  {asientos.filter(a => a.estado === 'disponible').length}
+                </div>
+                <div style={{ color: 'var(--color-text-muted)' }}>Disponibles</div>
               </div>
-              <div style={{ color: 'var(--color-text-muted)' }}>Disponibles</div>
-            </div>
-            <div className="text-center">
-              <div className="font-bold text-lg text-amber-400">
-                ${registros.reduce((sum, r) => sum + Number(r.monto_pagado), 0).toLocaleString()}
+              <div className="text-center">
+                <BlurValue className="font-bold text-lg text-amber-400 block">
+                  ${registros.reduce((sum, r) => sum + Number(r.monto_pagado), 0).toLocaleString()}
+                </BlurValue>
+                <div style={{ color: 'var(--color-text-muted)' }}>Recaudado</div>
               </div>
-              <div style={{ color: 'var(--color-text-muted)' }}>Recaudado</div>
             </div>
           </div>
         </div>
@@ -287,7 +323,6 @@ export default function HomePage() {
                 </h2>
 
                 <div className="space-y-4">
-                  {/* Nombre */}
                   <div>
                     <label className="block text-xs font-medium mb-1.5" style={{ color: 'var(--color-text-muted)' }}>
                       Nombre completo *
@@ -302,7 +337,6 @@ export default function HomePage() {
                     />
                   </div>
 
-                  {/* Nación */}
                   <div>
                     <label className="block text-xs font-medium mb-1.5" style={{ color: 'var(--color-text-muted)' }}>
                       Nación *
@@ -331,7 +365,6 @@ export default function HomePage() {
                     )}
                   </div>
 
-                  {/* Teléfono */}
                   <div>
                     <label className="block text-xs font-medium mb-1.5" style={{ color: 'var(--color-text-muted)' }}>
                       Teléfono
@@ -346,7 +379,6 @@ export default function HomePage() {
                     />
                   </div>
 
-                  {/* Correo */}
                   <div>
                     <label className="block text-xs font-medium mb-1.5" style={{ color: 'var(--color-text-muted)' }}>
                       Correo electrónico
@@ -361,7 +393,6 @@ export default function HomePage() {
                     />
                   </div>
 
-                  {/* Asientos seleccionados */}
                   <div>
                     <label className="block text-xs font-medium mb-1.5" style={{ color: 'var(--color-text-muted)' }}>
                       Asientos seleccionados
@@ -393,7 +424,6 @@ export default function HomePage() {
                 </h2>
 
                 <div className="space-y-4">
-                  {/* Precio por boleto */}
                   <div>
                     <label className="block text-xs font-medium mb-1.5" style={{ color: 'var(--color-text-muted)' }}>
                       Precio por boleto
@@ -407,7 +437,6 @@ export default function HomePage() {
                     />
                   </div>
 
-                  {/* Total */}
                   <div className="flex justify-between items-center py-2 border-b" style={{ borderColor: 'var(--color-border)' }}>
                     <span className="text-sm" style={{ color: 'var(--color-text-muted)' }}>
                       Total ({selectedSeats.length} boleto{selectedSeats.length !== 1 ? 's' : ''})
@@ -415,7 +444,6 @@ export default function HomePage() {
                     <span className="text-xl font-bold">${montoTotal.toLocaleString()}</span>
                   </div>
 
-                  {/* Método de pago */}
                   <div>
                     <label className="block text-xs font-medium mb-1.5" style={{ color: 'var(--color-text-muted)' }}>
                       Método de pago
@@ -437,7 +465,6 @@ export default function HomePage() {
                     </div>
                   </div>
 
-                  {/* Monto de abono */}
                   <div>
                     <label className="block text-xs font-medium mb-1.5" style={{ color: 'var(--color-text-muted)' }}>
                       Monto a pagar (abono o total)
@@ -469,7 +496,6 @@ export default function HomePage() {
                     </div>
                   </div>
 
-                  {/* Submit */}
                   <button
                     onClick={handleSubmit}
                     disabled={loading || !nombre.trim() || !nacionId || selectedSeats.length === 0}
@@ -493,6 +519,7 @@ export default function HomePage() {
             naciones={naciones}
             onSelect={(r) => setSelectedRegistro(r)}
             onRefresh={fetchData}
+            privacyMode={privacyMode}
           />
         )}
 
@@ -503,6 +530,14 @@ export default function HomePage() {
             onBack={() => { setSelectedRegistro(null); fetchData(); }}
             onRefresh={fetchData}
             addToast={addToast}
+          />
+        )}
+
+        {tab === 'dashboard' && (
+          <Dashboard
+            registros={registros}
+            asientos={asientos}
+            naciones={naciones}
           />
         )}
       </main>
