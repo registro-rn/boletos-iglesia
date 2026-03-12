@@ -8,9 +8,10 @@ interface Props {
   naciones: Nacion[];
   onSelect: (r: Registro) => void;
   onRefresh: () => void;
+  privacyMode?: boolean;
 }
 
-export default function RegistrosList({ registros, naciones, onSelect, onRefresh }: Props) {
+export default function RegistrosList({ registros, naciones, onSelect, onRefresh, privacyMode = false }: Props) {
   const [search, setSearch] = useState('');
   const [filterStatus, setFilterStatus] = useState<string>('todos');
   const [filterNacion, setFilterNacion] = useState<string>('todos');
@@ -37,6 +38,8 @@ export default function RegistrosList({ registros, naciones, onSelect, onRefresh
 
   const totalRecaudado = filtered.reduce((s, r) => s + Number(r.monto_pagado), 0);
   const totalPorCobrar = filtered.reduce((s, r) => s + (Number(r.monto_total) - Number(r.monto_pagado)), 0);
+
+  const blurStyle = privacyMode ? { filter: 'blur(8px)', userSelect: 'none' as const } : {};
 
   return (
     <div>
@@ -85,11 +88,11 @@ export default function RegistrosList({ registros, naciones, onSelect, onRefresh
           <div className="text-xs" style={{ color: 'var(--color-text-muted)' }}>Liquidados</div>
         </div>
         <div className="rounded-xl p-4 border" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
-          <div className="text-2xl font-bold text-emerald-400">${totalRecaudado.toLocaleString()}</div>
+          <div className="text-2xl font-bold text-emerald-400" style={blurStyle}>${totalRecaudado.toLocaleString()}</div>
           <div className="text-xs" style={{ color: 'var(--color-text-muted)' }}>Recaudado</div>
         </div>
         <div className="rounded-xl p-4 border" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
-          <div className="text-2xl font-bold text-amber-400">${totalPorCobrar.toLocaleString()}</div>
+          <div className="text-2xl font-bold text-amber-400" style={blurStyle}>${totalPorCobrar.toLocaleString()}</div>
           <div className="text-xs" style={{ color: 'var(--color-text-muted)' }}>Por cobrar</div>
         </div>
       </div>
@@ -144,9 +147,9 @@ export default function RegistrosList({ registros, naciones, onSelect, onRefresh
                       {statusLabels[r.status]}
                     </span>
                   </td>
-                  <td className="px-4 py-3 text-right font-medium">${Number(r.monto_pagado).toLocaleString()}</td>
-                  <td className="px-4 py-3 text-right" style={{ color: 'var(--color-text-muted)' }}>${Number(r.monto_total).toLocaleString()}</td>
-                  <td className="px-4 py-3 text-right">
+                  <td className="px-4 py-3 text-right font-medium" style={blurStyle}>${Number(r.monto_pagado).toLocaleString()}</td>
+                  <td className="px-4 py-3 text-right" style={{ ...blurStyle, color: 'var(--color-text-muted)' }}>${Number(r.monto_total).toLocaleString()}</td>
+                  <td className="px-4 py-3 text-right" style={blurStyle}>
                     {saldo > 0 ? (
                       <span className="text-amber-400 font-medium">${saldo.toLocaleString()}</span>
                     ) : (
