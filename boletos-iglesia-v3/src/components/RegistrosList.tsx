@@ -62,10 +62,14 @@ export default function RegistrosList({ registros, naciones, onSelect, onRefresh
   const checkedInCount = filtered.filter(r => (r as any).checked_in).length;
   const blurStyle = privacyMode ? { filter: 'blur(8px)', userSelect: 'none' as const } : {};
 
-  // Corte de caja: transactions from today
-  const today = new Date().toISOString().split('T')[0];
+  // Corte de caja: transactions from today (using Mexico City timezone)
+  const todayMX = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Mexico_City' }); // YYYY-MM-DD
   const allPagos = registros.flatMap(r => (r.pagos || []).map((p: any) => ({ ...p, registroNombre: r.nombre })));
-  const pagosHoy = allPagos.filter((p: any) => p.created_at && p.created_at.startsWith(today));
+  const pagosHoy = allPagos.filter((p: any) => {
+    if (!p.created_at) return false;
+    const pagoDateMX = new Date(p.created_at).toLocaleDateString('en-CA', { timeZone: 'America/Mexico_City' });
+    return pagoDateMX === todayMX;
+  });
   const corteEfectivo = pagosHoy.filter((p: any) => p.metodo_pago === 'efectivo').reduce((s: number, p: any) => s + Number(p.monto), 0);
   const corteTarjeta = pagosHoy.filter((p: any) => p.metodo_pago === 'tarjeta').reduce((s: number, p: any) => s + Number(p.monto), 0);
   const corteTransferencia = pagosHoy.filter((p: any) => p.metodo_pago === 'transferencia').reduce((s: number, p: any) => s + Number(p.monto), 0);
