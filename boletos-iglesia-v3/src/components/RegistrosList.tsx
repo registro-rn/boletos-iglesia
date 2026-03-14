@@ -121,6 +121,108 @@ export default function RegistrosList({ registros, naciones, onSelect, onRefresh
           style={showCorte ? { background: 'rgba(0,188,212,0.15)', borderColor: 'var(--color-accent)' } : { borderColor: 'var(--color-border)' }}>
           💰 Corte de caja
         </button>
+        <button onClick={async () => {
+          addToast?.('info', 'Generando PDF...');
+          try {
+            // Dynamic import of jsPDF and autoTable
+            const jsPDFModule = await import('jspdf');
+            const jsPDF = jsPDFModule.default;
+            const autoTableModule = await import('jspdf-autotable');
+
+            const doc = new jsPDF('portrait', 'mm', 'letter');
+
+            // Build subtitle with active filters
+            const filterParts: string[] = [];
+            if (filterStatus !== 'todos') filterParts.push(`Status: ${filterStatus.charAt(0).toUpperCase() + filterStatus.slice(1)}`);
+            if (filterTipo !== 'todos') filterParts.push(`Tipo: ${filterTipo}`);
+            if (filterNacion !== 'todos') {
+              const nacionName = naciones.find(n => n.id === filterNacion)?.nombre || '';
+              filterParts.push(`Nación: ${nacionName}`);
+            }
+            if (filterCheckIn === 'checked') filterParts.push('Con check-in');
+            if (filterCheckIn === 'unchecked') filterParts.push('Sin check-in');
+            if (search) filterParts.push(`Búsqueda: "${search}"`);
+            const subtitle = filterParts.length > 0 ? filterParts.join(' · ') : 'Todos los registros';
+
+            // Header
+            doc.setFontSize(18);
+            doc.setFont('helvetica', 'bold');
+            doc.text('Lista de Asistentes', 14, 20);
+            doc.setFontSize(10);
+            doc.setFont('helvetica', 'normal');
+            doc.setTextColor(120, 120, 120);
+            doc.text(subtitle, 14, 27);
+            doc.text(`Generado: ${new Date().toLocaleDateString('es-MX', { day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' })}`, 14, 33);
+            doc.text(`Total: ${filtered.length} registros`, 14, 39);
+            doc.setTextColor(0, 0, 0);
+
+            // Table data
+            const tableData = filtered.map((r, i) => {
+              const nacionNombre = (r as any).nacion?.nombre || '—';
+              const tipo = (r as any).tipo || 'general';
+              const statusLabel = r.status.charAt(0).toUpperCase() + r.status.slice(1);
+              return [
+                (i + 1).toString(),
+                r.nombre,
+                nacionNombre,
+                tipo,
+                statusLabel,
+              ];
+            });
+
+            // AutoTable
+            (doc as any).autoTable({
+              startY: 44,
+              head: [['#', 'Nombre', 'Nación', 'Tipo', 'Status']],
+              body: tableData,
+              theme: 'grid',
+              headStyles: {
+                fillColor: [30, 58, 95],
+                textColor: [255, 255, 255],
+                fontSize: 9,
+                fontStyle: 'bold',
+              },
+              bodyStyles: {
+                fontSize: 8,
+                cellPadding: 3,
+              },
+              columnStyles: {
+                0: { cellWidth: 12, halign: 'center' },
+                1: { cellWidth: 65 },
+                2: { cellWidth: 55 },
+                3: { cellWidth: 28 },
+                4: { cellWidth: 25, halign: 'center' },
+              },
+              alternateRowStyles: {
+                fillColor: [245, 247, 250],
+              },
+              didDrawPage: (data: any) => {
+                // Footer with page number
+                const pageCount = (doc as any).internal.getNumberOfPages();
+                doc.setFontSize(8);
+                doc.setTextColor(150, 150, 150);
+                doc.text(
+                  `Página ${data.pageNumber} de ${pageCount}`,
+                  doc.internal.pageSize.getWidth() / 2,
+                  doc.internal.pageSize.getHeight() - 10,
+                  { align: 'center' }
+                );
+              },
+            });
+
+            // Save
+            const fileName = `asistentes${filterStatus !== 'todos' ? '_' + filterStatus : ''}${filterTipo !== 'todos' ? '_' + filterTipo.toLowerCase() : ''}.pdf`;
+            doc.save(fileName);
+            addToast?.('success', `PDF exportado: ${filtered.length} registros`);
+          } catch (err: any) {
+            console.error(err);
+            addToast?.('error', 'Error al generar PDF. Intenta de nuevo.');
+          }
+        }}
+          className="px-4 py-2.5 rounded-lg text-sm border transition-all text-slate-400 hover:text-white hover:border-red-400"
+          style={{ borderColor: 'var(--color-border)' }}>
+          📄 Exportar PDF
+        </button>
       </div>
 
       {/* Corte de caja panel */}
